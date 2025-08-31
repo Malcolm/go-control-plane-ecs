@@ -6,36 +6,44 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ecs"
-	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	endpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 )
 
+// ecsClient defines the interface for the ECS API calls we need.
+// This allows us to mock the client in tests.
+type ecsClient interface {
+	ListTasks(ctx context.Context, params *ecs.ListTasksInput, optFns ...func(*ecs.Options)) (*ecs.ListTasksOutput, error)
+	DescribeTasks(ctx context.Context, params *ecs.DescribeTasksInput, optFns ...func(*ecs.Options)) (*ecs.DescribeTasksOutput, error)
+}
+
 func runEcsPoller(ctx context.Context, snapshotCache cache.SnapshotCache, awsRegion, ecsClusterName, ecsServiceName, nodeID string, pollingInterval time.Duration, l Logger) {
+	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(awsRegion))
+	if err != nil {
+		l.Errorf("runEcsPoller: failed to load aws config: %v", err)
+		return
+	}
+	ecsClient := ecs.NewFromConfig(cfg)
+
 	ticker := time.NewTicker(pollingInterval)
 	defer ticker.Stop()
+
+	// Initial fetch
+	updateEndpoints(ctx, ecsClient, snapshotCache, ecsClusterName, ecsServiceName, nodeID, l)
 
 	for {
 		select {
 		case <-ticker.C:
-			updateEndpoints(ctx, snapshotCache, awsRegion, ecsClusterName, ecsServiceName, nodeID, l)
+			updateEndpoints(ctx, ecsClient, snapshotCache, ecsClusterName, ecsServiceName, nodeID, l)
 		case <-ctx.Done():
 			return
 		}
 	}
 }
 
-func updateEndpoints(ctx context.Context, snapshotCache cache.SnapshotCache, awsRegion, ecsClusterName, ecsServiceName, nodeID string, l Logger) {
+func updateEndpoints(ctx context.Context, ecsClient ecsClient, snapshotCache cache.SnapshotCache, ecsClusterName, ecsServiceName, nodeID string, l Logger) {
 	l.Infof("Fetching ECS data for cluster %s, service %s", ecsClusterName, ecsServiceName)
-
-	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(awsRegion))
-	if err != nil {
-		l.Errorf("failed to load aws config: %v", err)
-		return
-	}
-
-	ecsClient := ecs.NewFromConfig(cfg)
 
 	listTasksOutput, err := ecsClient.ListTasks(ctx, &ecs.ListTasksInput{
 		Cluster:     &ecsClusterName,
@@ -110,10 +118,6 @@ func updateEndpoints(ctx context.Context, snapshotCache cache.SnapshotCache, aws
 
 	l.Infof("found %d endpoints for service %s", len(endpoints), ecsServiceName)
 
-	// Create a snapshot with the new endpoints.
-	// We need to create the other resources as well.
-	// For now, we'll just create the endpoint resource.
-	// We will create the other resources in the resources.go file.
 	snapshot := createSnapshot(ecsServiceName, endpoints)
 	if err := snapshotCache.SetSnapshot(ctx, nodeID, snapshot); err != nil {
 		l.Errorf("failed to set snapshot: %v", err)

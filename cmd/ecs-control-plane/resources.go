@@ -124,11 +124,16 @@ func createSnapshot(clusterName string, endpoints []*endpoint.LbEndpoint) *cache
 	const routeName = "local_route"
 	const listenerName = "listener_0"
 
+	var localityEndpoints []*endpoint.LocalityLbEndpoints
+	if len(endpoints) > 0 {
+		localityEndpoints = []*endpoint.LocalityLbEndpoints{{
+			LbEndpoints: endpoints,
+		}}
+	}
+
 	loadAssignment := &endpoint.ClusterLoadAssignment{
 		ClusterName: clusterName,
-		Endpoints: []*endpoint.LocalityLbEndpoints{{
-			LbEndpoints: endpoints,
-		}},
+		Endpoints:   localityEndpoints,
 	}
 
 	snap, _ := cache.NewSnapshot("1",

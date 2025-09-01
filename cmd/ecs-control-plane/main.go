@@ -35,7 +35,7 @@ func (l simpleLogger) Warnf(format string, args ...interface{})   { log.Printf(f
 func (l simpleLogger) Errorf(format string, args ...interface{}) { log.Printf(format, args...) }
 
 // loadConfig loads configuration from file, environment variables, and flags.
-func loadConfig(logger simpleLogger) (*Config, error) {
+func loadConfig() (*Config, error) {
 	v := viper.New()
 
 	v.SetDefault("port", 18000)
@@ -65,7 +65,7 @@ func main() {
 	pflag.Parse()
 
 	logger := simpleLogger{}
-	cfg, err := loadConfig(logger)
+	cfg, err := loadConfig()
 	if err != nil {
 		log.Fatalf("failed to load configuration: %v", err)
 	}

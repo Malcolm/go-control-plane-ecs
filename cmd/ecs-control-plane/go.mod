@@ -7,7 +7,10 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ecs v1.63.4
 	github.com/envoyproxy/go-control-plane v0.13.4
 	github.com/envoyproxy/go-control-plane/envoy v1.32.4
+	github.com/spf13/pflag v1.0.9
+	github.com/spf13/viper v1.20.1
 	github.com/stretchr/testify v1.11.1
+	google.golang.org/grpc v1.70.0
 	google.golang.org/protobuf v1.36.8
 )
 
@@ -29,14 +32,22 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/envoyproxy/go-control-plane/ratelimit v0.1.0 // indirect
 	github.com/envoyproxy/protoc-gen-validate v1.2.1 // indirect
-	github.com/kr/text v0.2.0 // indirect
+	github.com/fsnotify/fsnotify v1.8.0 // indirect
+	github.com/go-viper/mapstructure/v2 v2.2.1 // indirect
+	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
+	github.com/sagikazarmark/locafero v0.7.0 // indirect
+	github.com/sourcegraph/conc v0.3.0 // indirect
+	github.com/spf13/afero v1.12.0 // indirect
+	github.com/spf13/cast v1.7.1 // indirect
+	github.com/subosito/gotenv v1.6.0 // indirect
+	go.uber.org/atomic v1.9.0 // indirect
+	go.uber.org/multierr v1.9.0 // indirect
 	golang.org/x/net v0.34.0 // indirect
 	golang.org/x/sys v0.29.0 // indirect
 	golang.org/x/text v0.21.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20241202173237-19429a94021a // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20241202173237-19429a94021a // indirect
-	google.golang.org/grpc v1.70.0 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20241209162323-e6fa225c2576 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20241223144023-3abc09e42ca8 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

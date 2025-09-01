@@ -10,28 +10,29 @@ To build the `ecs-control-plane`, run the following command from the root of the
 go build ./cmd/ecs-control-plane
 ```
 
-## Running
+## Configuration
 
-The `ecs-control-plane` requires AWS credentials to be configured in the environment where it's running. It uses the default AWS credential chain, so you can configure credentials using environment variables, IAM roles, or the `~/.aws/credentials` file.
+The application can be configured via environment variables or command-line flags. The order of precedence is: Flags > Environment Variables > Defaults.
 
-### Flags
+### Environment Variables
 
-| Flag                 | Description                                | Default     |
-| -------------------- | ------------------------------------------ | ----------- |
-| `-port`              | xDS management server port                 | `18000`     |
-| `-node-id`           | Node ID to use for the snapshot cache      | `test-id`   |
-| `-aws-region`        | AWS region for the ECS cluster             | `us-west-2` |
-| `-ecs-cluster`       | Name of the ECS cluster to poll            | (required)  |
-| `-ecs-service`       | Name of the ECS service to poll            | (required)  |
-| `-polling-interval`  | Interval for polling ECS for new endpoints | `10s`       |
+All configuration options can be set with environment variables, prefixed with `XDS_`. Use underscores instead of hyphens.
 
-### Example
-
+Example:
 ```sh
-./ecs-control-plane \
-    -aws-region us-east-1 \
-    -ecs-cluster my-cluster \
-    -ecs-service my-service
+export XDS_AWS_REGION="us-east-1"
+export XDS_ECS_CLUSTER="my-cluster"
+export XDS_ECS_SERVICE="my-service"
+./ecs-control-plane
 ```
 
-This will start the xDS server on port 18000 and begin polling the `my-service` service in the `my-cluster` ECS cluster in the `us-east-1` region for endpoint updates.
+### Command-line Flags
+
+| Flag                 | Environment Variable      | Default     | Description                                |
+| -------------------- | ------------------------- | ----------- | ------------------------------------------ |
+| `-port`              | `XDS_PORT`                | `18000`     | xDS management server port.                |
+| `-node-id`           | `XDS_NODE_ID`             | `test-id`   | Node ID to use for the snapshot cache.     |
+| `-aws-region`        | `XDS_AWS_REGION`          | `us-west-2` | AWS region for the ECS cluster.            |
+| `-ecs-cluster`       | `XDS_ECS_CLUSTER`         | (required)  | Name of the ECS cluster to poll.           |
+| `-ecs-service`       | `XDS_ECS_SERVICE`         | (required)  | Name of the ECS service to poll.           |
+| `-polling-interval`  | `XDS_POLLING_INTERVAL`    | `10s`       | Interval for polling ECS for new endpoints.|

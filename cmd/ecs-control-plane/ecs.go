@@ -11,12 +11,13 @@ import (
 	core "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	endpoint "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/cache/v3"
+	"go.uber.org/zap"
 )
 
-func runEcsPoller(ctx context.Context, snapshotCache cache.SnapshotCache, awsRegion, ecsCluster, ecsService, nodeID string, pollingInterval time.Duration, logger simpleLogger) {
+func runEcsPoller(ctx context.Context, snapshotCache cache.SnapshotCache, awsRegion, ecsCluster, ecsService, nodeID string, pollingInterval time.Duration, logger *zap.SugaredLogger) {
 	cfg, err := config.LoadDefaultConfig(ctx, config.WithRegion(awsRegion))
 	if err != nil {
-		logger.Errorf("failed to load aws config: %v", err)
+		logger.Errorw("failed to load aws config", "error", err)
 		return
 	}
 	ecsClient := ecs.NewFromConfig(cfg)
@@ -39,15 +40,15 @@ type ecsClient interface {
 	DescribeTasks(ctx context.Context, params *ecs.DescribeTasksInput, optFns ...func(*ecs.Options)) (*ecs.DescribeTasksOutput, error)
 }
 
-func updateEndpoints(ctx context.Context, ecsClient ecsClient, snapshotCache cache.SnapshotCache, ecsCluster, ecsService, nodeID string, logger simpleLogger) {
-	logger.Infof("fetching endpoints for service %s", ecsService)
+func updateEndpoints(ctx context.Context, ecsClient ecsClient, snapshotCache cache.SnapshotCache, ecsCluster, ecsService, nodeID string, logger *zap.SugaredLogger) {
+	logger.Infow("fetching endpoints for service", "service", ecsService)
 
 	listTasksOutput, err := ecsClient.ListTasks(ctx, &ecs.ListTasksInput{
 		Cluster:     &ecsCluster,
 		ServiceName: &ecsService,
 	})
 	if err != nil {
-		logger.Errorf("failed to list ecs tasks: %v", err)
+		logger.Errorw("failed to list ecs tasks", "error", err)
 		return
 	}
 
@@ -58,23 +59,23 @@ func updateEndpoints(ctx context.Context, ecsClient ecsClient, snapshotCache cac
 			Tasks:   listTasksOutput.TaskArns,
 		})
 		if err != nil {
-			logger.Errorf("failed to describe ecs tasks: %v", err)
+			logger.Errorw("failed to describe ecs tasks", "error", err)
 			return
 		}
 		endpoints = extractEndpoints(describeTasksOutput.Tasks)
 	}
 
-	logger.Infof("found %d endpoints for service %s", len(endpoints), ecsService)
+	logger.Infow("found endpoints for service", "count", len(endpoints), "service", ecsService)
 
 	version := fmt.Sprintf("%d", time.Now().Unix())
 	snapshot := createSnapshot(version, ecsService, endpoints)
 	if err := snapshot.Consistent(); err != nil {
-		logger.Errorf("new snapshot is not consistent: %v", err)
+		logger.Errorw("new snapshot is not consistent", "error", err)
 		return
 	}
 
 	if err := snapshotCache.SetSnapshot(ctx, nodeID, snapshot); err != nil {
-		logger.Errorf("failed to set snapshot: %v", err)
+		logger.Errorw("failed to set snapshot", "error", err)
 	}
 }
 

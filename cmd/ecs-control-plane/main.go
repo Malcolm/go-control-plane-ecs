@@ -3,17 +3,17 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"strings"
 	"time"
 
+	discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/test/v3"
-	discoverygrpc "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	pflag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 )
 
@@ -25,14 +25,8 @@ type Config struct {
 	ECSCluster      string        `mapstructure:"ecs-cluster"`
 	ECSService      string        `mapstructure:"ecs-service"`
 	PollingInterval time.Duration `mapstructure:"polling-interval"`
+	LogLevel        string        `mapstructure:"log-level"`
 }
-
-type simpleLogger struct{}
-
-func (l simpleLogger) Debugf(format string, args ...interface{}) { log.Printf(format, args...) }
-func (l simpleLogger) Infof(format string, args ...interface{})  { log.Printf(format, args...) }
-func (l simpleLogger) Warnf(format string, args ...interface{})   { log.Printf(format, args...) }
-func (l simpleLogger) Errorf(format string, args ...interface{}) { log.Printf(format, args...) }
 
 // loadConfig loads configuration from file, environment variables, and flags.
 func loadConfig() (*Config, error) {
@@ -41,6 +35,7 @@ func loadConfig() (*Config, error) {
 	v.SetDefault("port", 18000)
 	v.SetDefault("node-id", "test-id")
 	v.SetDefault("polling-interval", 10*time.Second)
+	v.SetDefault("log-level", "info")
 
 	v.BindPFlags(pflag.CommandLine)
 	v.SetEnvPrefix("XDS")
@@ -62,16 +57,28 @@ func main() {
 	pflag.String("ecs-cluster", "", "ECS cluster name")
 	pflag.String("ecs-service", "", "ECS service name")
 	pflag.Duration("polling-interval", 10*time.Second, "Polling interval for ECS metadata")
+	pflag.String("log-level", "info", "Log level (debug, info, warn, error)")
 	pflag.Parse()
 
-	logger := simpleLogger{}
+	// A temporary logger for startup.
+	tempLogger, _ := zap.NewProduction()
+	sugaredTempLogger := tempLogger.Sugar()
+
 	cfg, err := loadConfig()
 	if err != nil {
-		log.Fatalf("failed to load configuration: %v", err)
+		sugaredTempLogger.Fatalf("failed to load configuration: %v", err)
 	}
 
+	rawLogger, err := newLogger(cfg.LogLevel)
+	if err != nil {
+		sugaredTempLogger.Fatalf("failed to create logger: %v", err)
+	}
+	zap.ReplaceGlobals(rawLogger)
+	logger := rawLogger.Sugar()
+	defer logger.Sync()
+
 	if cfg.ECSCluster == "" || cfg.ECSService == "" {
-		log.Fatal("'-ecs-cluster' and '-ecs-service' are required")
+		logger.Fatal("'-ecs-cluster' and '-ecs-service' are required")
 	}
 
 	snapshotCache := cache.NewSnapshotCache(false, cache.IDHash{}, logger)
@@ -85,12 +92,22 @@ func main() {
 	grpcServer := grpc.NewServer()
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", cfg.Port))
 	if err != nil {
-		log.Fatal(err)
+		logger.Fatalf("failed to listen: %v", err)
 	}
 
 	discoverygrpc.RegisterAggregatedDiscoveryServiceServer(grpcServer, srv)
 	logger.Infof("management server listening on %d", cfg.Port)
 	if err := grpcServer.Serve(lis); err != nil {
-		log.Println(err)
+		logger.Errorw("failed to start grpc server", "error", err)
 	}
+}
+
+func newLogger(level string) (*zap.Logger, error) {
+	config := zap.NewProductionConfig()
+	logLevel := zap.NewAtomicLevel()
+	if err := logLevel.UnmarshalText([]byte(level)); err != nil {
+		return nil, err
+	}
+	config.Level = logLevel
+	return config.Build()
 }

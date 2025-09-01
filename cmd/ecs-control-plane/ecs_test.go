@@ -9,6 +9,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/ecs/types"
 	"github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
 )
 
 type mockEcsClient struct {
@@ -40,9 +41,9 @@ func TestUpdateEndpoints(t *testing.T) {
 			}}}, nil
 		},
 	}
-
-	snapshotCache := cache.NewSnapshotCache(false, cache.IDHash{}, simpleLogger{})
-	updateEndpoints(context.Background(), mockClient, snapshotCache, "cluster", "service", "node", simpleLogger{})
+	logger, _ := zap.NewDevelopment()
+	snapshotCache := cache.NewSnapshotCache(false, cache.IDHash{}, logger.Sugar())
+	updateEndpoints(context.Background(), mockClient, snapshotCache, "cluster", "service", "node", logger.Sugar())
 
 	snapshot, err := snapshotCache.GetSnapshot("node")
 	assert.NoError(t, err)
@@ -56,8 +57,9 @@ func TestUpdateEndpoints_ListTasksError(t *testing.T) {
 		},
 	}
 
-	snapshotCache := cache.NewSnapshotCache(false, cache.IDHash{}, simpleLogger{})
-	updateEndpoints(context.Background(), mockClient, snapshotCache, "cluster", "service", "node", simpleLogger{})
+	logger, _ := zap.NewDevelopment()
+	snapshotCache := cache.NewSnapshotCache(false, cache.IDHash{}, logger.Sugar())
+	updateEndpoints(context.Background(), mockClient, snapshotCache, "cluster", "service", "node", logger.Sugar())
 
 	_, err := snapshotCache.GetSnapshot("node")
 	assert.Error(t, err)

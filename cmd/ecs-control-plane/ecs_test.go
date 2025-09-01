@@ -12,6 +12,7 @@ import (
 	"github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
 )
 
 func TestUpdateEndpoints(t *testing.T) {
@@ -114,7 +115,7 @@ func TestUpdateEndpoints(t *testing.T) {
 
 			snapshotCache := cache.NewSnapshotCache(false, cache.IDHash{}, nil)
 
-			updateEndpoints(context.Background(), mockClient, snapshotCache, "test-cluster", "test-service", "test-node", Logger{})
+			updateEndpoints(context.Background(), mockClient, snapshotCache, "test-cluster", "test-service", "test-node", zap.NewNop())
 
 			snapshot, err := snapshotCache.GetSnapshot("test-node")
 			if tc.expectSnapshot {

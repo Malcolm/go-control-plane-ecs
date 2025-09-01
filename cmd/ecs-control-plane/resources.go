@@ -18,17 +18,18 @@ import (
 	"github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 )
 
-const (
-	ListenerPort = 10000
-)
-
 func makeCluster(clusterName string) *cluster.Cluster {
 	return &cluster.Cluster{
 		Name:                 clusterName,
 		ConnectTimeout:       durationpb.New(5 * time.Second),
 		ClusterDiscoveryType: &cluster.Cluster_Type{Type: cluster.Cluster_EDS},
 		EdsClusterConfig: &cluster.Cluster_EdsClusterConfig{
-			EdsConfig: makeConfigSource(),
+			EdsConfig: &core.ConfigSource{
+				ResourceApiVersion: resource.DefaultAPIVersion,
+				ConfigSourceSpecifier: &core.ConfigSource_Ads{
+					Ads: &core.AggregatedConfigSource{},
+				},
+			},
 		},
 	}
 }
@@ -57,15 +58,20 @@ func makeRoute(routeName, clusterName string) *route.RouteConfiguration {
 	}
 }
 
-func makeHTTPListener(listenerName, route string) *listener.Listener {
+func makeHTTPListener(listenerName, routeName string) *listener.Listener {
 	routerConfig, _ := anypb.New(&router.Router{})
 	manager := &hcm.HttpConnectionManager{
 		CodecType:  hcm.HttpConnectionManager_AUTO,
 		StatPrefix: "http",
 		RouteSpecifier: &hcm.HttpConnectionManager_Rds{
 			Rds: &hcm.Rds{
-				ConfigSource:    makeConfigSource(),
-				RouteConfigName: route,
+				ConfigSource: &core.ConfigSource{
+					ResourceApiVersion: resource.DefaultAPIVersion,
+					ConfigSourceSpecifier: &core.ConfigSource_Ads{
+						Ads: &core.AggregatedConfigSource{},
+					},
+				},
+				RouteConfigName: routeName,
 			},
 		},
 		HttpFilters: []*hcm.HttpFilter{{
@@ -73,10 +79,7 @@ func makeHTTPListener(listenerName, route string) *listener.Listener {
 			ConfigType: &hcm.HttpFilter_TypedConfig{TypedConfig: routerConfig},
 		}},
 	}
-	pbst, err := anypb.New(manager)
-	if err != nil {
-		panic(err)
-	}
+	pbst, _ := anypb.New(manager)
 
 	return &listener.Listener{
 		Name: listenerName,
@@ -86,43 +89,23 @@ func makeHTTPListener(listenerName, route string) *listener.Listener {
 					Protocol: core.SocketAddress_TCP,
 					Address:  "0.0.0.0",
 					PortSpecifier: &core.SocketAddress_PortValue{
-						PortValue: ListenerPort,
+						PortValue: 10000,
 					},
 				},
 			},
 		},
 		FilterChains: []*listener.FilterChain{{
 			Filters: []*listener.Filter{{
-				Name: "http-connection-manager",
-				ConfigType: &listener.Filter_TypedConfig{
-					TypedConfig: pbst,
-				},
+				Name:       "http-connection-manager",
+				ConfigType: &listener.Filter_TypedConfig{TypedConfig: pbst},
 			}},
 		}},
 	}
 }
 
-func makeConfigSource() *core.ConfigSource {
-	source := &core.ConfigSource{}
-	source.ResourceApiVersion = resource.DefaultAPIVersion
-	source.ConfigSourceSpecifier = &core.ConfigSource_ApiConfigSource{
-		ApiConfigSource: &core.ApiConfigSource{
-			TransportApiVersion:       resource.DefaultAPIVersion,
-			ApiType:                   core.ApiConfigSource_GRPC,
-			SetNodeOnFirstMessageOnly: true,
-			GrpcServices: []*core.GrpcService{{
-				TargetSpecifier: &core.GrpcService_EnvoyGrpc_{
-					EnvoyGrpc: &core.GrpcService_EnvoyGrpc{ClusterName: "xds_cluster"},
-				},
-			}},
-		},
-	}
-	return source
-}
-
-func createSnapshot(clusterName string, endpoints []*endpoint.LbEndpoint) *cache.Snapshot {
-	const routeName = "local_route"
-	const listenerName = "listener_0"
+func createSnapshot(version string, clusterName string, endpoints []*endpoint.LbEndpoint) *cache.Snapshot {
+	routeName := "local_route"
+	listenerName := "listener_0"
 
 	var localityEndpoints []*endpoint.LocalityLbEndpoints
 	if len(endpoints) > 0 {
@@ -131,18 +114,11 @@ func createSnapshot(clusterName string, endpoints []*endpoint.LbEndpoint) *cache
 		}}
 	}
 
-	loadAssignment := &endpoint.ClusterLoadAssignment{
-		ClusterName: clusterName,
-		Endpoints:   localityEndpoints,
-	}
-
-	snap, _ := cache.NewSnapshot("1",
-		map[resource.Type][]types.Resource{
-			resource.ClusterType:  {makeCluster(clusterName)},
-			resource.RouteType:    {makeRoute(routeName, clusterName)},
-			resource.ListenerType: {makeHTTPListener(listenerName, routeName)},
-			resource.EndpointType: {loadAssignment},
-		},
-	)
+	snap, _ := cache.NewSnapshot(version, map[resource.Type][]types.Resource{
+		resource.ClusterType:  {makeCluster(clusterName)},
+		resource.EndpointType: {&endpoint.ClusterLoadAssignment{ClusterName: clusterName, Endpoints: localityEndpoints}},
+		resource.RouteType:    {makeRoute(routeName, clusterName)},
+		resource.ListenerType: {makeHTTPListener(listenerName, routeName)},
+	})
 	return snap
 }
